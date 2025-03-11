@@ -1,0 +1,445 @@
+Find Requests Blocked by WAF for Today
+You can filter records where action = 'BLOCK' and restrict the time range.
+
+Query to Get Blocked Requests for Today:
+sql
+Copy
+Edit
+SELECT 
+  timestamp,
+  webaclid,
+  terminatingruleid,
+  httprequest.clientip,
+  httprequest.uri
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND year = CAST(date_format(current_date, '%Y') AS STRING)
+AND month = CAST(date_format(current_date, '%m') AS STRING)
+AND day = CAST(date_format(current_date, '%d') AS STRING)
+ORDER BY timestamp DESC;
+How This Works:
+✅ current_date gets today's date dynamically.
+✅ date_format(current_date, '%Y') extracts the year as a string.
+✅ date_format(current_date, '%m') extracts the month as a string.
+✅ date_format(current_date, '%d') extracts the day as a string.
+✅ ORDER BY timestamp DESC sorts results from newest to oldest.
+
+2️⃣ Find Blocked Requests in a Specific Time Range
+To filter by a specific time range, we need to convert the timestamp field to the Chicago timezone.
+
+Query for Blocked Requests Between 8 AM - 10 AM (Chicago Time)
+sql
+Copy
+Edit
+SELECT 
+  timestamp,
+  webaclid,
+  terminatingruleid,
+  httprequest.clientip,
+  httprequest.uri,
+  from_iso8601_timestamp(timestamp) AT TIME ZONE 'America/Chicago' AS chicago_time
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND year = CAST(date_format(current_date, '%Y') AS STRING)
+AND month = CAST(date_format(current_date, '%m') AS STRING)
+AND day = CAST(date_format(current_date, '%d') AS STRING)
+AND from_iso8601_timestamp(timestamp) AT TIME ZONE 'America/Chicago' 
+    BETWEEN TIMESTAMP '2025-03-11 08:00:00' AND TIMESTAMP '2025-03-11 10:00:00'
+ORDER BY chicago_time DESC;
+How This Works:
+✅ from_iso8601_timestamp(timestamp) AT TIME ZONE 'America/Chicago' converts UTC logs to Chicago time.
+✅ BETWEEN TIMESTAMP 'YYYY-MM-DD HH:MM:SS' AND TIMESTAMP 'YYYY-MM-DD HH:MM:SS' filters by a specific time range.
+✅ Adjust the date dynamically for automation.
+
+3️⃣ Get All Logs with Chicago Time Conversion
+If you want all logs (not just blocked requests) with timestamps converted to Chicago time, use:
+
+sql
+Copy
+Edit
+SELECT 
+  timestamp,
+  from_iso8601_timestamp(timestamp) AT TIME ZONE 'America/Chicago' AS chicago_time,
+  webaclid,
+  terminatingruleid,
+  action,
+  httprequest.clientip,
+  httprequest.uri
+FROM waf_logs
+WHERE year = CAST(date_format(current_date, '%Y') AS STRING)
+AND month = CAST(date_format(current_date, '%m') AS STRING)
+AND day = CAST(date_format(current_date, '%d') AS STRING)
+ORDER BY chicago_time DESC;
+✅ This query converts timestamps to Chicago time while retrieving all logs (BLOCK, ALLOW, COUNT, etc.).
+
+Summary of Queries
+Query	Description
+1️⃣ Blocked requests today	Shows WAF BLOCK requests for today.
+2️⃣ Blocked requests in a time range	Filters BLOCK logs between 8 AM - 10 AM CST/CDT.
+3️⃣ All logs with Chicago time	Converts all timestamps to America/Chicago timezone.
+Let me know if you need modifications or additional filters! 🚀
+
+You said:
+Ok can you give some possible queries for WAF logs which I can run for troubleshooting
+ChatGPT said:
+Here are some useful Athena queries for AWS WAF logs that can help with troubleshooting and analysis:
+
+1️⃣ Find the Most Blocked IPs
+This helps identify which IPs are being blocked the most by WAF.
+
+sql
+Copy
+Edit
+SELECT 
+  httprequest.clientip, 
+  COUNT(*) AS block_count
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND year = CAST(date_format(current_date, '%Y') AS STRING)
+AND month = CAST(date_format(current_date, '%m') AS STRING)
+AND day = CAST(date_format(current_date, '%d') AS STRING)
+GROUP BY httprequest.clientip
+ORDER BY block_count DESC
+LIMIT 20;
+✅ Use case: Identify malicious IPs or troubleshoot false positives.
+
+2️⃣ Most Frequently Triggered Rules
+Find out which WAF rules are triggering the most blocks.
+
+sql
+Copy
+Edit
+SELECT 
+  terminatingruleid, 
+  COUNT(*) AS block_count
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND year = CAST(date_format(current_date, '%Y') AS STRING)
+AND month = CAST(date_format(current_date, '%m') AS STRING)
+AND day = CAST(date_format(current_date, '%d') AS STRING)
+GROUP BY terminatingruleid
+ORDER BY block_count DESC
+LIMIT 10;
+✅ Use case: Determine which WAF rule is causing the most blocks.
+
+3️⃣ Identify Requests from a Suspicious IP
+Check all requests (BLOCK, ALLOW, COUNT) from a specific IP address.
+
+sql
+Copy
+Edit
+SELECT 
+  timestamp,
+  from_iso8601_timestamp(timestamp) AT TIME ZONE 'America/Chicago' AS chicago_time,
+  action,
+  webaclid,
+  terminatingruleid,
+  httprequest.uri,
+  httprequest.httpmethod,
+  httprequest.args
+FROM waf_logs
+WHERE httprequest.clientip = 'XXX.XXX.XXX.XXX'  -- Replace with suspicious IP
+AND year = CAST(date_format(current_date, '%Y') AS STRING)
+AND month = CAST(date_format(current_date, '%m') AS STRING)
+AND day = CAST(date_format(current_date, '%d') AS STRING)
+ORDER BY chicago_time DESC;
+✅ Use case: Check if a specific IP is legitimate or malicious.
+
+4️⃣ List Blocked Requests by User-Agent
+Check which User-Agents (browsers, bots, etc.) were blocked.
+
+sql
+Copy
+Edit
+SELECT 
+  headers.value AS user_agent,
+  COUNT(*) AS block_count
+FROM waf_logs 
+CROSS JOIN UNNEST(httprequest.headers) AS t(headers)
+WHERE action = 'BLOCK'
+AND headers.name = 'User-Agent'
+AND year = CAST(date_format(current_date, '%Y') AS STRING)
+AND month = CAST(date_format(current_date, '%m') AS STRING)
+AND day = CAST(date_format(current_date, '%d') AS STRING)
+GROUP BY user_agent
+ORDER BY block_count DESC
+LIMIT 20;
+✅ Use case: Identify problematic bots or malicious scripts.
+
+5️⃣ Top 10 Blocked URLs (Endpoints)
+Find out which URLs are being blocked the most.
+
+sql
+Copy
+Edit
+SELECT 
+  httprequest.uri, 
+  COUNT(*) AS block_count
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND year = CAST(date_format(current_date, '%Y') AS STRING)
+AND month = CAST(date_format(current_date, '%m') AS STRING)
+AND day = CAST(date_format(current_date, '%d') AS STRING)
+GROUP BY httprequest.uri
+ORDER BY block_count DESC
+LIMIT 10;
+✅ Use case: Determine which parts of your app are under attack.
+
+6️⃣ Find Requests with Suspicious Query Strings
+Detect requests with long or potentially malicious query strings.
+
+sql
+Copy
+Edit
+SELECT 
+  httprequest.uri, 
+  httprequest.args, 
+  COUNT(*) AS request_count
+FROM waf_logs
+WHERE LENGTH(httprequest.args) > 1000  -- Adjust threshold for long query strings
+AND year = CAST(date_format(current_date, '%Y') AS STRING)
+AND month = CAST(date_format(current_date, '%m') AS STRING)
+AND day = CAST(date_format(current_date, '%d') AS STRING)
+GROUP BY httprequest.uri, httprequest.args
+ORDER BY request_count DESC
+LIMIT 20;
+✅ Use case: Detect SQL injection attempts or malicious payloads.
+
+7️⃣ Count of Requests by Country
+Get a count of blocked requests per country.
+
+sql
+Copy
+Edit
+SELECT 
+  httprequest.country, 
+  COUNT(*) AS block_count
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND year = CAST(date_format(current_date, '%Y') AS STRING)
+AND month = CAST(date_format(current_date, '%m') AS STRING)
+AND day = CAST(date_format(current_date, '%d') AS STRING)
+GROUP BY httprequest.country
+ORDER BY block_count DESC
+LIMIT 10;
+✅ Use case: Identify geographic attack patterns.
+
+8️⃣ Top HTTP Methods Used in Attacks
+Find out which HTTP methods (GET, POST, PUT, DELETE, etc.) are being used in blocked requests.
+
+sql
+Copy
+Edit
+SELECT 
+  httprequest.httpmethod, 
+  COUNT(*) AS block_count
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND year = CAST(date_format(current_date, '%Y') AS STRING)
+AND month = CAST(date_format(current_date, '%m') AS STRING)
+AND day = CAST(date_format(current_date, '%d') AS STRING)
+GROUP BY httprequest.httpmethod
+ORDER BY block_count DESC;
+✅ Use case: Check if attackers are using unusual HTTP methods.
+
+9️⃣ Find Requests with Empty User-Agent (Possible Bots)
+Look for requests that do not specify a User-Agent, which is common in bot attacks.
+
+sql
+Copy
+Edit
+SELECT 
+  httprequest.clientip, 
+  COUNT(*) AS request_count
+FROM waf_logs 
+CROSS JOIN UNNEST(httprequest.headers) AS t(headers)
+WHERE headers.name = 'User-Agent' AND headers.value = ''
+AND year = CAST(date_format(current_date, '%Y') AS STRING)
+AND month = CAST(date_format(current_date, '%m') AS STRING)
+AND day = CAST(date_format(current_date, '%d') AS STRING)
+GROUP BY httprequest.clientip
+ORDER BY request_count DESC
+LIMIT 20;
+✅ Use case: Identify headless browsers or automated scraping attempts.
+
+🔟 Requests Blocked by Rate-Based Rule
+If you use rate-based WAF rules, this query finds requests blocked by them.
+
+sql
+Copy
+Edit
+SELECT 
+  timestamp,
+  webaclid,
+  terminatingruleid,
+  httprequest.clientip,
+  httprequest.uri
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND terminatingruletype = 'RATE_BASED'
+AND year = CAST(date_format(current_date, '%Y') AS STRING)
+AND month = CAST(date_format(current_date, '%m') AS STRING)
+AND day = CAST(date_format(current_date, '%d') AS STRING)
+ORDER BY timestamp DESC;
+✅ Use case: Identify IP addresses getting rate-limited.
+
+🔥 Bonus: Real-Time Query for Last 30 Minutes
+To get blocked requests from the last 30 minutes, run:
+
+sql
+Copy
+Edit
+SELECT 
+  timestamp,
+  from_iso8601_timestamp(timestamp) AT TIME ZONE 'America/Chicago' AS chicago_time,
+  action,
+  httprequest.clientip,
+  httprequest.uri
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND from_iso8601_timestamp(timestamp) >= now() - interval '30' minute
+ORDER BY chicago_time DESC;
+✅ Use case: Live monitoring of WAF activity.
+
+🚀 Summary:
+Query	Use Case
+🔹 Blocked IPs	Find attackers
+🔹 Top WAF rules triggered	Identify problematic rules
+🔹 Requests from a specific IP	Investigate a suspicious client
+🔹 Blocked User-Agents	Detect bots & scrapers
+🔹 Top blocked URLs	Identify attack hotspots
+🔹 Suspicious query strings	Detect injection attempts
+🔹 Blocked requests by country	See geographic patterns
+🔹 HTTP methods used in attacks	Unusual requests
+🔹 Requests with empty User-Agent	Possible bots
+🔹 Rate-based rule blocks	Find rate-limited IPs
+🔹 Live WAF monitoring (last 30 min)	Real-time tracking
+Let me know if you need custom queries for your specific troubleshooting case! 🚀
+
+You said:
+Ok I need to see if the request coming from webseal is getting blocked by WAF or not 
+ChatGPT said:
+To check if requests from WebSEAL are getting blocked by AWS WAF, you'll need to filter the logs based on either User-Agent, Source IP, or Headers that WebSEAL adds to requests.
+
+Steps to Identify WebSEAL Requests Being Blocked
+Identify how WebSEAL traffic is marked:
+
+WebSEAL typically adds specific headers (e.g., X-WebSEAL-Auth, X-Forwarded-For).
+It may have a unique User-Agent string.
+It might originate from a specific set of IP addresses.
+Run Athena Queries to Filter Out WebSEAL Requests:
+
+If you know the User-Agent WebSEAL uses, search for it.
+If WebSEAL uses specific headers, extract them.
+If WebSEAL has a known IP range, filter by that.
+1️⃣ Find Blocked Requests from WebSEAL by User-Agent
+If WebSEAL uses a specific User-Agent, check if it's getting blocked:
+
+sql
+Copy
+Edit
+SELECT 
+  timestamp,
+  from_iso8601_timestamp(timestamp) AT TIME ZONE 'America/Chicago' AS chicago_time,
+  webaclid,
+  terminatingruleid,
+  httprequest.clientip,
+  httprequest.uri,
+  headers.value AS user_agent
+FROM waf_logs 
+CROSS JOIN UNNEST(httprequest.headers) AS t(headers)
+WHERE action = 'BLOCK'
+AND headers.name = 'User-Agent'
+AND headers.value LIKE '%WebSEAL%'  -- Adjust based on WebSEAL's User-Agent
+AND year = CAST(date_format(current_date, '%Y') AS STRING)
+AND month = CAST(date_format(current_date, '%m') AS STRING)
+AND day = CAST(date_format(current_date, '%d') AS STRING)
+ORDER BY chicago_time DESC;
+✅ Use case: This checks if requests from WebSEAL User-Agent are blocked.
+
+2️⃣ Find Blocked Requests from WebSEAL by Specific Headers
+If WebSEAL adds a custom header (e.g., X-WebSEAL-Auth), you can filter WAF logs for it.
+
+sql
+Copy
+Edit
+SELECT 
+  timestamp,
+  from_iso8601_timestamp(timestamp) AT TIME ZONE 'America/Chicago' AS chicago_time,
+  webaclid,
+  terminatingruleid,
+  httprequest.clientip,
+  httprequest.uri,
+  headers.name AS header_name,
+  headers.value AS header_value
+FROM waf_logs 
+CROSS JOIN UNNEST(httprequest.headers) AS t(headers)
+WHERE action = 'BLOCK'
+AND headers.name = 'X-WebSEAL-Auth'  -- Adjust based on WebSEAL's headers
+AND year = CAST(date_format(current_date, '%Y') AS STRING)
+AND month = CAST(date_format(current_date, '%m') AS STRING)
+AND day = CAST(date_format(current_date, '%d') AS STRING)
+ORDER BY chicago_time DESC;
+✅ Use case: Check if requests containing WebSEAL-specific headers are being blocked.
+
+3️⃣ Find Blocked Requests from WebSEAL's IP Range
+If WebSEAL sends requests from a known IP range, filter for it.
+
+sql
+Copy
+Edit
+SELECT 
+  timestamp,
+  from_iso8601_timestamp(timestamp) AT TIME ZONE 'America/Chicago' AS chicago_time,
+  webaclid,
+  terminatingruleid,
+  httprequest.clientip,
+  httprequest.uri
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND httprequest.clientip LIKE 'XXX.XXX.XXX.%'  -- Replace with WebSEAL IP range
+AND year = CAST(date_format(current_date, '%Y') AS STRING)
+AND month = CAST(date_format(current_date, '%m') AS STRING)
+AND day = CAST(date_format(current_date, '%d') AS STRING)
+ORDER BY chicago_time DESC;
+✅ Use case: Check if WebSEAL IP addresses are blocked.
+
+4️⃣ Find All WebSEAL Requests (Blocked & Allowed)
+If you want to see ALL WebSEAL requests (not just blocked ones), modify the queries by removing WHERE action = 'BLOCK'.
+
+sql
+Copy
+Edit
+SELECT 
+  timestamp,
+  from_iso8601_timestamp(timestamp) AT TIME ZONE 'America/Chicago' AS chicago_time,
+  action,  -- Shows BLOCK, ALLOW, COUNT
+  webaclid,
+  terminatingruleid,
+  httprequest.clientip,
+  httprequest.uri,
+  headers.value AS user_agent
+FROM waf_logs 
+CROSS JOIN UNNEST(httprequest.headers) AS t(headers)
+WHERE headers.name = 'User-Agent'
+AND headers.value LIKE '%WebSEAL%'
+AND year = CAST(date_format(current_date, '%Y') AS STRING)
+AND month = CAST(date_format(current_date, '%m') AS STRING)
+AND day = CAST(date_format(current_date, '%d') AS STRING)
+ORDER BY chicago_time DESC;
+✅ Use case: See which WebSEAL requests are allowed vs. blocked.
+
+🔥 What If WebSEAL Requests Are Blocked?
+If you find WebSEAL requests being blocked:
+
+Check WAF rules: Which terminatingruleid is blocking it?
+Look at rate-based rules: Is WebSEAL exceeding limits?
+Analyze headers: Is WebSEAL missing a required header?
+Allowlisting WebSEAL: Consider allowing WebSEAL IP ranges or adding a custom rule to bypass false positives.
+🚀 Summary: Key Queries
+Query	Use Case
+Blocked WebSEAL requests by User-Agent	Checks if WebSEAL requests are blocked due to User-Agent
+Blocked WebSEAL requests by Header	Finds requests blocked due to missing/invalid headers
+Blocked WebSEAL requests by IP	Finds requests blocked from WebSEAL IPs
+All WebSEAL requests (Blocked & Allowed)	See all WebSEAL requests to compare behavior
+Let me know if you need a customized query for your setup! 🚀
