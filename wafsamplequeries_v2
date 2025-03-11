@@ -1,0 +1,204 @@
+
+1️⃣ Check If WebSEAL Requests Are Being Blocked
+If WebSEAL uses a specific User-Agent, check if it's getting blocked:
+
+sql
+Copy
+Edit
+SELECT 
+  from_unixtime(CAST(timestamp AS BIGINT)) AT TIME ZONE 'America/Chicago' AS readable_timestamp,
+  action,
+  webaclid,
+  terminatingruleid,
+  httprequest.clientip,
+  httprequest.uri,
+  headers.value AS user_agent
+FROM waf_logs 
+CROSS JOIN UNNEST(httprequest.headers) AS t(headers)
+WHERE action = 'BLOCK'
+AND headers.name = 'User-Agent'
+AND headers.value LIKE '%WebSEAL%'  -- Adjust based on WebSEAL's User-Agent
+AND year = date_format(current_date, '%Y') 
+AND month = date_format(current_date, '%m') 
+AND day = date_format(current_date, '%d') 
+ORDER BY readable_timestamp DESC;
+✅ Find out if WebSEAL requests are being blocked based on User-Agent.
+
+2️⃣ Find Blocked WebSEAL Requests Based on a Specific Header
+If WebSEAL adds a custom header (e.g., X-WebSEAL-Auth), filter WAF logs for it.
+
+sql
+Copy
+Edit
+SELECT 
+  from_unixtime(CAST(timestamp AS BIGINT)) AT TIME ZONE 'America/Chicago' AS readable_timestamp,
+  action,
+  webaclid,
+  terminatingruleid,
+  httprequest.clientip,
+  httprequest.uri,
+  headers.name AS header_name,
+  headers.value AS header_value
+FROM waf_logs 
+CROSS JOIN UNNEST(httprequest.headers) AS t(headers)
+WHERE action = 'BLOCK'
+AND headers.name = 'X-WebSEAL-Auth'  -- Adjust based on WebSEAL's headers
+AND year = date_format(current_date, '%Y') 
+AND month = date_format(current_date, '%m') 
+AND day = date_format(current_date, '%d') 
+ORDER BY readable_timestamp DESC;
+✅ Check if WebSEAL requests are being blocked due to missing/invalid headers.
+
+3️⃣ Find Blocked Requests from WebSEAL’s IP Range
+If WebSEAL sends requests from a known IP range, check if those IPs are being blocked.
+
+sql
+Copy
+Edit
+SELECT 
+  from_unixtime(CAST(timestamp AS BIGINT)) AT TIME ZONE 'America/Chicago' AS readable_timestamp,
+  action,
+  webaclid,
+  terminatingruleid,
+  httprequest.clientip,
+  httprequest.uri
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND httprequest.clientip LIKE 'XXX.XXX.XXX.%'  -- Replace with WebSEAL IP range
+AND year = date_format(current_date, '%Y') 
+AND month = date_format(current_date, '%m') 
+AND day = date_format(current_date, '%d') 
+ORDER BY readable_timestamp DESC;
+✅ Find if WebSEAL IP addresses are blocked.
+
+4️⃣ Compare WebSEAL Requests (Blocked vs. Allowed)
+To check whether WebSEAL requests are being allowed or blocked, remove the action = 'BLOCK' condition.
+
+sql
+Copy
+Edit
+SELECT 
+  from_unixtime(CAST(timestamp AS BIGINT)) AT TIME ZONE 'America/Chicago' AS readable_timestamp,
+  action,  -- Shows BLOCK, ALLOW, COUNT
+  webaclid,
+  terminatingruleid,
+  httprequest.clientip,
+  httprequest.uri
+FROM waf_logs
+WHERE httprequest.clientip LIKE 'XXX.XXX.XXX.%'  -- Replace with WebSEAL IP range
+AND year = date_format(current_date, '%Y') 
+AND month = date_format(current_date, '%m') 
+AND day = date_format(current_date, '%d') 
+ORDER BY readable_timestamp DESC;
+✅ See how WAF is handling WebSEAL traffic.
+
+5️⃣ Find the Most Blocked IPs
+Check which IPs are getting blocked the most.
+
+sql
+Copy
+Edit
+SELECT 
+  httprequest.clientip, 
+  COUNT(*) AS block_count
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND year = date_format(current_date, '%Y') 
+AND month = date_format(current_date, '%m') 
+AND day = date_format(current_date, '%d') 
+GROUP BY httprequest.clientip
+ORDER BY block_count DESC
+LIMIT 20;
+✅ Identify repeated malicious IPs.
+
+6️⃣ Most Frequently Triggered WAF Rules
+Find which WAF rules are triggering the most blocks.
+
+sql
+Copy
+Edit
+SELECT 
+  terminatingruleid, 
+  COUNT(*) AS block_count
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND year = date_format(current_date, '%Y') 
+AND month = date_format(current_date, '%m') 
+AND day = date_format(current_date, '%d') 
+GROUP BY terminatingruleid
+ORDER BY block_count DESC
+LIMIT 10;
+✅ Find out which WAF rule is causing most blocks.
+
+7️⃣ Top 10 Blocked URLs (Endpoints)
+Check which URLs are being blocked the most.
+
+sql
+Copy
+Edit
+SELECT 
+  httprequest.uri, 
+  COUNT(*) AS block_count
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND year = date_format(current_date, '%Y') 
+AND month = date_format(current_date, '%m') 
+AND day = date_format(current_date, '%d') 
+GROUP BY httprequest.uri
+ORDER BY block_count DESC
+LIMIT 10;
+✅ Find attack hotspots on your application.
+
+8️⃣ Requests Blocked by Rate-Based Rule
+If you use rate-based WAF rules, find out if they’re blocking WebSEAL requests.
+
+sql
+Copy
+Edit
+SELECT 
+  from_unixtime(CAST(timestamp AS BIGINT)) AT TIME ZONE 'America/Chicago' AS readable_timestamp,
+  action,
+  webaclid,
+  terminatingruleid,
+  httprequest.clientip,
+  httprequest.uri
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND terminatingruletype = 'RATE_BASED'
+AND year = date_format(current_date, '%Y') 
+AND month = date_format(current_date, '%m') 
+AND day = date_format(current_date, '%d') 
+ORDER BY readable_timestamp DESC;
+✅ Check if WebSEAL is exceeding WAF rate limits.
+
+9️⃣ Real-Time Query for Last 30 Minutes
+To monitor WAF blocked requests from the last 30 minutes, use:
+
+sql
+Copy
+Edit
+SELECT 
+  from_unixtime(CAST(timestamp AS BIGINT)) AT TIME ZONE 'America/Chicago' AS readable_timestamp,
+  action,
+  webaclid,
+  terminatingruleid,
+  httprequest.clientip,
+  httprequest.uri
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND from_unixtime(CAST(timestamp AS BIGINT)) >= now() - interval '30' minute
+ORDER BY readable_timestamp DESC;
+✅ Useful for live monitoring of WAF activity.
+
+🚀 Summary: Key Queries
+Query	What It Does
+🔹 Find blocked WebSEAL requests by User-Agent	Checks if WebSEAL requests are being blocked based on User-Agent.
+🔹 Find blocked WebSEAL requests by Header	Identifies WebSEAL requests blocked due to missing/invalid headers.
+🔹 Find blocked WebSEAL requests by IP	Checks if WebSEAL requests are being blocked due to their source IP.
+🔹 Compare all WebSEAL requests (Blocked vs. Allowed)	See how WAF is handling WebSEAL traffic.
+🔹 Find the most blocked IPs	Identify repeated malicious IPs.
+🔹 Most frequently triggered WAF rules	Determine which WAF rule is blocking the most.
+🔹 Top 10 blocked URLs (endpoints)	See which URLs are targeted the most.
+🔹 Find rate-based rule blocks	Identify if WAF is rate-limiting WebSEAL traffic.
+🔹 Live monitoring (last 30 minutes)	Get real-time blocked requests.
+Let me know if you need any modifications or additional queries! 🚀
