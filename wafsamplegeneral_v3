@@ -1,0 +1,264 @@
+1️⃣ Find Blocked Requests for Today
+Identify all blocked requests for today.
+
+sql
+Copy
+Edit
+SELECT 
+  from_unixtime(CAST(timestamp AS BIGINT)) AT TIME ZONE 'America/Chicago' AS readable_timestamp,
+  action,
+  webaclid,
+  terminatingruleid,
+  httprequest.clientip,
+  httprequest.uri
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND year = date_format(current_date, '%Y') 
+AND month = date_format(current_date, '%m') 
+AND day = date_format(current_date, '%d') 
+ORDER BY readable_timestamp DESC
+LIMIT 100;
+✅ Use case: Find all blocked requests from WAF for today.
+
+2️⃣ Find Top Blocked IPs
+Identify which IPs are triggering WAF the most.
+
+sql
+Copy
+Edit
+SELECT 
+  httprequest.clientip, 
+  COUNT(*) AS block_count
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND year = date_format(current_date, '%Y') 
+AND month = date_format(current_date, '%m') 
+AND day = date_format(current_date, '%d') 
+GROUP BY httprequest.clientip
+ORDER BY block_count DESC
+LIMIT 20;
+✅ Use case: Identify attack sources or false positives.
+
+3️⃣ Find Most Frequently Triggered WAF Rules
+Check which WAF rules are blocking traffic the most.
+
+sql
+Copy
+Edit
+SELECT 
+  terminatingruleid, 
+  COUNT(*) AS block_count
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND year = date_format(current_date, '%Y') 
+AND month = date_format(current_date, '%m') 
+AND day = date_format(current_date, '%d') 
+GROUP BY terminatingruleid
+ORDER BY block_count DESC
+LIMIT 10;
+✅ Use case: Find out which WAF rule is causing the most blocks.
+
+4️⃣ Top Blocked URLs (Endpoints)
+Find which URLs are targeted the most.
+
+sql
+Copy
+Edit
+SELECT 
+  httprequest.uri, 
+  COUNT(*) AS block_count
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND year = date_format(current_date, '%Y') 
+AND month = date_format(current_date, '%m') 
+AND day = date_format(current_date, '%d') 
+GROUP BY httprequest.uri
+ORDER BY block_count DESC
+LIMIT 10;
+✅ Use case: Identify attack hotspots in your application.
+
+5️⃣ Requests Blocked by Country
+Find the top countries generating blocked requests.
+
+sql
+Copy
+Edit
+SELECT 
+  httprequest.country, 
+  COUNT(*) AS block_count
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND year = date_format(current_date, '%Y') 
+AND month = date_format(current_date, '%m') 
+AND day = date_format(current_date, '%d') 
+GROUP BY httprequest.country
+ORDER BY block_count DESC
+LIMIT 10;
+✅ Use case: Spot geographic attack patterns.
+
+6️⃣ Blocked Requests by User-Agent
+Check which User-Agents (browsers, bots, etc.) were blocked.
+
+sql
+Copy
+Edit
+SELECT 
+  headers.value AS user_agent,
+  COUNT(*) AS block_count
+FROM waf_logs 
+CROSS JOIN UNNEST(httprequest.headers) AS t(headers)
+WHERE action = 'BLOCK'
+AND headers.name = 'User-Agent'
+AND year = date_format(current_date, '%Y') 
+AND month = date_format(current_date, '%m') 
+AND day = date_format(current_date, '%d') 
+GROUP BY user_agent
+ORDER BY block_count DESC
+LIMIT 20;
+✅ Use case: Identify bots, scrapers, or unusual clients.
+
+7️⃣ Find Blocked Requests by IP Range
+If you suspect an IP range is getting blocked, check for pattern-based blocks.
+
+sql
+Copy
+Edit
+SELECT 
+  from_unixtime(CAST(timestamp AS BIGINT)) AT TIME ZONE 'America/Chicago' AS readable_timestamp,
+  action,
+  httprequest.clientip,
+  httprequest.uri
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND httprequest.clientip LIKE '192.168.%'  -- Adjust this for your IP range
+AND year = date_format(current_date, '%Y') 
+AND month = date_format(current_date, '%m') 
+AND day = date_format(current_date, '%d') 
+ORDER BY readable_timestamp DESC;
+✅ Use case: Find blocked internal or external IP ranges.
+
+8️⃣ Find Requests Blocked by Rate-Based Rule
+If WAF rate-based rules are enabled, find out if requests are being throttled.
+
+sql
+Copy
+Edit
+SELECT 
+  from_unixtime(CAST(timestamp AS BIGINT)) AT TIME ZONE 'America/Chicago' AS readable_timestamp,
+  action,
+  terminatingruleid,
+  httprequest.clientip,
+  httprequest.uri
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND terminatingruletype = 'RATE_BASED'
+AND year = date_format(current_date, '%Y') 
+AND month = date_format(current_date, '%m') 
+AND day = date_format(current_date, '%d') 
+ORDER BY readable_timestamp DESC;
+✅ Use case: See if WAF is rate-limiting specific IPs.
+
+9️⃣ Check All Requests (Blocked & Allowed)
+To compare how WAF is handling requests, view all requests (BLOCK, ALLOW, COUNT).
+
+sql
+Copy
+Edit
+SELECT 
+  from_unixtime(CAST(timestamp AS BIGINT)) AT TIME ZONE 'America/Chicago' AS readable_timestamp,
+  action,
+  httprequest.clientip,
+  httprequest.uri
+FROM waf_logs
+WHERE year = date_format(current_date, '%Y') 
+AND month = date_format(current_date, '%m') 
+AND day = date_format(current_date, '%d') 
+ORDER BY readable_timestamp DESC
+LIMIT 100;
+✅ Use case: Compare blocked vs. allowed requests.
+
+🔟 Live Query for Last 30 Minutes
+To monitor real-time WAF activity, query the last 30 minutes of blocked requests.
+
+sql
+Copy
+Edit
+SELECT 
+  from_unixtime(CAST(timestamp AS BIGINT)) AT TIME ZONE 'America/Chicago' AS readable_timestamp,
+  action,
+  httprequest.clientip,
+  httprequest.uri
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND from_unixtime(CAST(timestamp AS BIGINT)) >= now() - interval '30' minute
+ORDER BY readable_timestamp DESC;
+✅ Use case: Track WAF activity in near real-time.
+
+🚀 Summary: Essential WAF Queries
+Query	What It Does
+Find blocked requests for today	See all blocked requests from WAF for today
+Find top blocked IPs	Identify IPs that trigger WAF the most
+Find most triggered WAF rules	Determine which WAF rule is blocking the most
+Find most blocked URLs	See which URLs are being targeted
+Find blocked requests by country	Check attack trends by geographic region
+Find blocked User-Agents	Identify suspicious bots or scrapers
+Find blocked requests by IP range	Look for blocked requests from a specific network
+Find rate-based rule blocks	Check if WAF is throttling IPs
+Compare all WAF requests (Blocked & Allowed)	View how WAF handles different requests
+Live monitoring (last 30 min)	Get near real-time WAF logs
+Let me know if you need more queries or customizations! 🚀
+
+You said:
+Ok also an example of choosing a specific date and time range
+ChatGPT said:
+To filter AWS WAF logs for a specific date and time range, you need to convert the timestamp field and apply conditions on it.
+
+✅ Example: Query for a Specific Date and Time Range
+🔍 Scenario:
+Find all blocked requests on March 10, 2025, between 08:00 AM and 10:00 AM CST (America/Chicago).
+
+sql
+Copy
+Edit
+SELECT 
+  from_unixtime(CAST(timestamp AS BIGINT)) AT TIME ZONE 'America/Chicago' AS readable_timestamp,
+  action,
+  webaclid,
+  terminatingruleid,
+  httprequest.clientip,
+  httprequest.uri
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND year = '2025'
+AND month = '03'
+AND day = '10'
+AND from_unixtime(CAST(timestamp AS BIGINT)) AT TIME ZONE 'America/Chicago' 
+    BETWEEN TIMESTAMP '2025-03-10 08:00:00' AND TIMESTAMP '2025-03-10 10:00:00'
+ORDER BY readable_timestamp DESC;
+📝 Explanation of Filters
+✅ year = '2025' AND month = '03' AND day = '10' → Filters March 10, 2025 (helps optimize queries on partitioned data).
+✅ from_unixtime(CAST(timestamp AS BIGINT)) AT TIME ZONE 'America/Chicago' → Converts the timestamp to a human-readable format in CST/CDT.
+✅ BETWEEN TIMESTAMP 'YYYY-MM-DD HH:MM:SS' AND TIMESTAMP 'YYYY-MM-DD HH:MM:SS' → Filters records within 08:00 AM - 10:00 AM.
+✅ ORDER BY readable_timestamp DESC → Sorts results newest to oldest.
+
+🚀 Example: Query for a Different Date & Time Range
+Let’s say you want March 8, 2025, between 10:30 PM and 11:45 PM CST:
+
+sql
+Copy
+Edit
+SELECT 
+  from_unixtime(CAST(timestamp AS BIGINT)) AT TIME ZONE 'America/Chicago' AS readable_timestamp,
+  action,
+  webaclid,
+  terminatingruleid,
+  httprequest.clientip,
+  httprequest.uri
+FROM waf_logs
+WHERE action = 'BLOCK'
+AND year = '2025'
+AND month = '03'
+AND day = '08'
+AND from_unixtime(CAST(timestamp AS BIGINT)) AT TIME ZONE 'America/Chicago' 
+    BETWEEN TIMESTAMP '2025-03-08 22:30:00' AND TIMESTAMP '2025-03-08 23:45:00'
+ORDER BY readable_timestamp DESC;
