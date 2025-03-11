@@ -1,0 +1,32 @@
+CREATE EXTERNAL TABLE waf_logs (
+  timestamp string,
+  formatversion int,
+  webaclid string,
+  action string,
+  terminatingruleid string,
+  terminatingruletype string,
+  httprequest struct<
+    clientip: string,
+    country: string,
+    headers: array<struct<name: string, value: string>>,
+    uri: string,
+    args: string,
+    httpversion: string,
+    httpmethod: string,
+    requestid: string
+  >
+)
+PARTITIONED BY (year string, month string, day string)
+ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'
+STORED AS TEXTFILE
+LOCATION 's3://your-waf-logs-bucket/AWSLogs/{account-id}/WAFLogs/AWSAccount/us-east-2/'
+TBLPROPERTIES (
+  'projection.enabled'='true',
+  'projection.year.type'='integer',
+  'projection.year.range'='2024,2026',
+  'projection.month.type'='integer',
+  'projection.month.range'='1,12',
+  'projection.day.type'='integer',
+  'projection.day.range'='1,31',
+  'storage.location.template'='s3://your-waf-logs-bucket/AWSLogs/{account-id}/WAFLogs/AWSAccount/us-east-2/${year}/${month}/${day}/'
+);
