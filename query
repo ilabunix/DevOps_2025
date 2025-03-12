@@ -6,3 +6,14 @@ WHERE CAST(date || ' ' || time AS TIMESTAMP)
           AND TIMESTAMP '2025-03-12 11:55:00 UTC'
 AND status = 500
 ORDER BY chicago_time DESC;
+
+
+SELECT *, 
+       CAST(CAST(date AS VARCHAR) || ' ' || time AS TIMESTAMP) 
+           AT TIME ZONE 'UTC' AT TIME ZONE 'America/Chicago' AS chicago_time
+FROM default.cloudfront_logs
+WHERE CAST(CAST(date AS VARCHAR) || ' ' || time AS TIMESTAMP) 
+      BETWEEN TIMESTAMP '2025-03-12 10:50:00 UTC' 
+          AND TIMESTAMP '2025-03-12 11:55:00 UTC'
+AND status = 500
+ORDER BY chicago_time DESC;
